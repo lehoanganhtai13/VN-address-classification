@@ -33,8 +33,12 @@ class addressSegmentation():
         self.districtCheck = ''
         self.wardCheck = ''
         province, district, ward = '', '', ''
+        breakFlag = False
+        DistrictEqualWardFlag = False
 
         inputAddress = self.preprocessing(address)
+        inputAddressFIRST = inputAddress
+        NotFoundProvince, NotFoundDistrict = False, False
 
         # Search for province -> output: 
         # + address without province part if found or address with N characters left out if not 
@@ -53,6 +57,10 @@ class addressSegmentation():
             # In case, if can't search for province, 
             # it will use each province in total to search for district 
             # with more shift times.
+
+            # Province is missing or not correct
+            NotFoundProvince = True
+
             province_list = self.trie.list_children1()
             for item in province_list:   
                 self.provinceCheck = item
@@ -73,13 +81,41 @@ class addressSegmentation():
         #   In case, if district was not found before that, 
         #   [1] and [2] will be used to retrieve district and ward, respectively.
         if self.provinceCheck == '' and self.districtCheck == '':
-            pass
+            NotFoundDistrict = True
+            province_list = self.trie.list_children1()
+            quotient, remainder = divmod(len(inputAddress), 2)
+            res_first = inputAddress[:quotient + remainder]
+            for item in province_list:
+                self.provinceCheck = item
+                district_list = self.trie.list_children2(self.provinceCheck)
+                for item1 in district_list:
+                    self.districtCheck = item1
+                    ward_list = self.trie.list_children3(self.provinceCheck, self.districtCheck)
+                    inputAddress3, search_result = self.findWard(3, res_first)
+                    if self.wardCheck != '':                      
+                        if address.find(',,') != -1 or address.find(', ,') != -1:
+                            province = search_result[0]
+                            district = ''
+                        else:
+                            province = ''
+                            district = search_result[1]
+                        ward = search_result[2]
+                        breakFlag = True
+                        break
+                if breakFlag == True:
+                    break
         elif self.districtCheck != '':
             district = search_result[-1]
             inputAddress3, search_result = self.findWard(1, inputAddress2)
             if self.wardCheck != '':
-                ward = search_result[-1]
+                ward = search_result[-1]	
+            else:  #tìm xã bằng chuỗi trước khi tìm huyện
+                inputAddress3, search_result = self.findWard(1, inputAddress1)              
+                if self.wardCheck != '':
+                    ward = search_result[-1]  #lúc này huyện và xã cùng tên
+                    DistrictEqualWardFlag = True
         else:
+            NotFoundDistrict = True
             district_list = self.trie.list_children2(self.provinceCheck)
             for item in district_list:
                 self.districtCheck = item
@@ -87,7 +123,25 @@ class addressSegmentation():
                 if self.wardCheck != '':
                     district = search_result[1]
                     ward = search_result[2]
-                    break
+                    break  
+
+        if NotFoundDistrict == True and NotFoundProvince == True:
+            pass
+        elif NotFoundProvince == True and NotFoundDistrict == False:
+            temp = len(inputAddressFIRST) - (inputAddressFIRST.find(self.districtCheck) + len(self.districtCheck))
+            if temp < 4:
+               province = ''
+        elif NotFoundProvince == False and NotFoundDistrict == True:
+            temp = inputAddressFIRST.find(self.provinceCheck) - (inputAddressFIRST.find(self.wardCheck) + len(self.wardCheck))
+            if temp < 4:
+                district = ''
+        if province == 'Hà Giang' and inputAddressFIRST.find('nongtruongvietlam') != -1: #case đặc biệt, tên quá dài nên hard code =))
+            ward = 'Nông Trường Việt Lâm'           
+        if DistrictEqualWardFlag == True:           # xã và huyện cùng tên, nếu có kí tự ,, or , , trong address thì tức huyện missing, xoá huyện đi           
+            if address.find(',,') != -1 or address.find(', ,') != -1:
+                district = ''   #xoá huyện
+            else:
+                ward = ''   #xoá xã
         
         result = {
             "province": province,
@@ -99,6 +153,8 @@ class addressSegmentation():
     def preprocessing(self, text):
         """Remove redundant characters, lowercase text, and remove accent marks."""
         text = text.replace('\n','').lower()
+        text = text.replace(',tph ','').replace(' tph ','').replace('tph.','').replace('tp.','').replace(',tp ','').replace(' tp ','')
+        text = text.replace('thành phố','').replace('tỉnh','').replace(' t ','').replace(',t ','')
         text = unidecode.unidecode(text)
         #text = text.replace('j','')
         text = text.replace('w','').replace('z','g')
@@ -172,9 +228,9 @@ class addressSegmentation():
 
         retry_count = 0
         if case == 1:
-            retry_count = 16
+            retry_count = 18
         elif case == 2:
-            retry_count = 31
+            retry_count = 33
 
         while retry_count > 0:
             if len(inputAddress) < 2:
@@ -182,12 +238,21 @@ class addressSegmentation():
             retry_count -= 1
             num_char_check = 0
             char_pos = len(inputAddress) - 1
-            while num_char_check < 15:
+            while num_char_check < 18:
                 if len(inputAddress) < 2 or len(inputAddress) - num_char_check == 0:
                     break
                 data = []
                 data.append(self.provinceCheck)
-                data.append(inputAddress[char_pos:len(inputAddress)])
+
+                if inputAddress[char_pos].isnumeric() != True:  #check kí tự khác số ?
+                    data.append(inputAddress[char_pos:len(inputAddress)])
+                else:
+                    if inputAddress[char_pos-1].isnumeric() == True:
+                        char_pos -= 1
+                        data.append(inputAddress[char_pos:len(inputAddress)]) #tìm 2 số liên tiếp nếu có 
+                    else:
+                        data.append(inputAddress[char_pos:len(inputAddress)])  #ko có thì tìm bth
+
                 search_result = self.trie.search(data)
                 #print('Tìm trong Trie: ',data , search_result)
                 if search_result != False:
@@ -222,9 +287,11 @@ class addressSegmentation():
 
         retry_count = 0
         if case == 1:
-            retry_count = 16
+            retry_count = 19
         elif case == 2:
-            retry_count = 46
+            retry_count = 49
+        elif case == 3:
+            retry_count = len(inputAddress)
         
         while retry_count > 0:
             if len(inputAddress) < 2:
@@ -232,13 +299,22 @@ class addressSegmentation():
             retry_count -= 1
             num_char_check = 0
             char_pos = len(inputAddress) - 1
-            while num_char_check < 15:
+            while num_char_check < 19:
                 if len(inputAddress) < 2 or len(inputAddress) - num_char_check == 0:
                     break
                 data = []
                 data.append(self.provinceCheck)
                 data.append(self.districtCheck)
-                data.append(inputAddress[char_pos:len(inputAddress)])
+
+                if inputAddress[char_pos].isnumeric() != True:  #check kí tự khác số ?
+                    data.append(inputAddress[char_pos:len(inputAddress)])
+                else:
+                    if inputAddress[char_pos-1].isnumeric() == True:
+                        char_pos -= 1
+                        data.append(inputAddress[char_pos:len(inputAddress)]) #tìm 2 số liên tiếp
+                    else:
+                        data.append(inputAddress[char_pos:len(inputAddress)])    
+
                 search_result = self.trie.search(data)
                 # print('Tìm trong Trie: ',data , search_result)
                 if search_result != False:
@@ -250,7 +326,7 @@ class addressSegmentation():
 
             if self.wardCheck != '':    
                 inputAddress = inputAddress[0:positionMatch]
-                #print(f'xoá phần tử {wardCheck}, input còn lại: ',inputAddress)
+                #print(f'xoá phần tử {self.wardCheck}, input còn lại: ',inputAddress)
                 return inputAddress, search_result
             else:
                 inputAddress = inputAddress[0:len(inputAddress)-1]
