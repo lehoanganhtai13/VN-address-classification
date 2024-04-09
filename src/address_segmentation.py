@@ -35,6 +35,7 @@ class addressSegmentation():
         province, district, ward = '', '', ''
         breakFlag = False
         DistrictEqualWardFlag = False
+        wardFoundFlag = False
 
         inputAddress = self.preprocessing(address)
         inputAddressFIRST = inputAddress
@@ -90,7 +91,6 @@ class addressSegmentation():
                 district_list = self.trie.list_children2(self.provinceCheck)
                 for item1 in district_list:
                     self.districtCheck = item1
-                    ward_list = self.trie.list_children3(self.provinceCheck, self.districtCheck)
                     inputAddress3, search_result = self.findWard(3, res_first)
                     if self.wardCheck != '':                      
                         if address.find(',,') != -1 or address.find(', ,') != -1:
@@ -109,11 +109,44 @@ class addressSegmentation():
             inputAddress3, search_result = self.findWard(1, inputAddress2)
             if self.wardCheck != '':
                 ward = search_result[-1]	
-            else:  #tìm xã bằng chuỗi trước khi tìm huyện
-                inputAddress3, search_result = self.findWard(1, inputAddress1)              
-                if self.wardCheck != '':
-                    ward = search_result[-1]  #lúc này huyện và xã cùng tên
-                    DistrictEqualWardFlag = True
+            else:
+                #thử tìm tất cả xã trong chuỗi còn lại inputAddress2
+                #tìm tất cả xã trong huyện đã tìm dc: 
+                ward_list_x = self.trie.list_children3(self.provinceCheck, self.districtCheck)
+                lengthWarlist = len(ward_list_x) - 1
+                listItems = ward_list_x
+                listItems2 = ward_list_x
+                countItems = 0
+                conditionBreak = 0
+                while conditionBreak < lengthWarlist-1:
+                    for item in listItems:
+                        if len(item) < 3:
+                            conditionBreak += 1
+                            break
+                        if inputAddress2.find(item) == -1: 
+                            item = item[0:len(item)-1]
+                        else:
+                            ward_list_x = self.trie.list_children3(self.provinceCheck, self.districtCheck)
+                            trieData = [self.provinceCheck,self.districtCheck,ward_list_x[countItems]]
+                            search_result = self.trie.search(trieData)
+                            if search_result != False:
+                                self.wardCheck = item
+                                ward = search_result[2]
+                                wardFoundFlag = True
+                                break 
+                        listItems2[countItems] = item
+                        countItems += 1
+                    listItems = listItems2
+                    countItems = 0
+                    if wardFoundFlag == True: 
+                        break #break while
+                    
+                if  wardFoundFlag == False:       
+                    #tìm xã bằng chuỗi trước khi tìm huyện
+                    inputAddress3, search_result = self.findWard(1, inputAddress1)              
+                    if self.wardCheck != '':
+                        ward = search_result[-1]  #lúc này huyện và xã cùng tên
+                        DistrictEqualWardFlag = True
         else:
             NotFoundDistrict = True
             district_list = self.trie.list_children2(self.provinceCheck)
@@ -153,10 +186,11 @@ class addressSegmentation():
     def preprocessing(self, text):
         """Remove redundant characters, lowercase text, and remove accent marks."""
         text = text.replace('\n','').lower()
-        text = text.replace(',tph ','').replace(' tph ','').replace('tph.','').replace('tp.','').replace(',tp ','').replace(' tp ','')
-        text = text.replace('thành phố','').replace('tỉnh','').replace(' t ','').replace(',t ','')
+        text = text.replace(',tph ','').replace('t.phố','').replace('t.phô','').replace(',t.pho','').replace(' tph ','')
+        text = text.replace('tph.','').replace('tp.','').replace(',tp ','').replace(' tp ','').replace('thành phố','').replace('tỉnh','').replace(' t ','').replace(',t ','')
         text = unidecode.unidecode(text)
-        #text = text.replace('j','')
+        text = text.replace('j','')
+        #text = text.replace('z','')
         text = text.replace('w','').replace('z','g')
         return re.sub('[^A-Za-z0-9]+', '', text) 
 

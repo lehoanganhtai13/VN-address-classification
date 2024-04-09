@@ -10,8 +10,7 @@ class Solution:
         self.province_path = 'list_province.txt'
         self.district_path = 'list_district.txt'
         self.ward_path = 'list_ward.txt'
+        self.segmenter = addressSegmentation(open(dataset_file_path, encoding="utf8").readlines())
 
     def process(self, s: str):
-        dataset = open(dataset_file_path, encoding="utf8").readlines()
-        segmenter = addressSegmentation(dataset)
-        return segmenter.segment(s)
+        return self.segmenter.segment(s)
