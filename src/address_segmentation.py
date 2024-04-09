@@ -34,25 +34,27 @@ class addressSegmentation():
         self.wardCheck = ''
         province, district, ward = '', '', ''
         breakFlag = False
-        DistrictEqualWardFlag = False
+        DistrictEqualWardFlag = False  
+        districtFoundFlag = False
         wardFoundFlag = False
 
         inputAddress = self.preprocessing(address)
         inputAddressFIRST = inputAddress
         NotFoundProvince, NotFoundDistrict = False, False
 
+        # =============================================================================================
         # Search for province -> output: 
         # + address without province part if found or address with N characters left out if not 
         #   N is number of retry times for searching
         # + search result list: [] if not found or [province] if found
         inputAddress1, search_result = self.findProvince(inputAddress)
 
+        # =============================================================================================
         # Search for district -> output:
         # + address with district part being left out if found
         # + search result list: [] if not found or [province, district] if found
         if self.provinceCheck != '':
             province = search_result[-1]
-            # print('input', inputAddress1)
             inputAddress2, search_result = self.findDistrict(1, inputAddress1)
         else:
             # In case, if can't search for province, 
@@ -66,7 +68,6 @@ class addressSegmentation():
             for item in province_list:   
                 self.provinceCheck = item
                 inputAddress2, search_result = self.findDistrict(2, inputAddress)
-                #print(provinceCheck)
                 if self.districtCheck != '':
                     province = search_result[0]
                     district = search_result[1]
@@ -76,12 +77,18 @@ class addressSegmentation():
             if self.districtCheck == '':
                 self.provinceCheck = ''
 
+        # =============================================================================================
         # Search for ward -> output:
         # + search result list: [] if not found or [province, district, ward] if found.
         #   Therefore, value of ward if found will always be the last value of the list [-1].
         #   In case, if district was not found before that, 
         #   [1] and [2] will be used to retrieve district and ward, respectively.
         if self.provinceCheck == '' and self.districtCheck == '':
+            # -> For cases where the province and district cannot be searched beforehand,
+            # ward will be searched within each district of every province, based on left half of an address.
+            # -> If found, then check if there are ',,' or ', ,' in the full address, 
+            # indicating that the district does not exist in the address;
+            # otherwise, the province does not exist in the address.
             NotFoundDistrict = True
             province_list = self.trie.list_children1()
             quotient, remainder = divmod(len(inputAddress), 2)
